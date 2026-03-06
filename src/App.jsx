@@ -7,15 +7,23 @@ const timeToMinutes = (time) => {
   return hours * 60 + minutes;
 };
 
-// 유틸리티: 오늘 날짜 'YYYY-MM-DD' 반환
-const getToday = () => {
-  return new Date().toISOString().split('T')[0];
+// 유틸리티: 한국 표준시(KST) 기준 오늘 날짜 'YYYY-MM-DD' 반환
+const getTodayKST = () => {
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const kst = new Date(utc + (9 * 3600000)); // UTC + 9시간
+  
+  const year = kst.getFullYear();
+  const month = String(kst.getMonth() + 1).padStart(2, '0');
+  const day = String(kst.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
 };
 
 const ADMIN_PASSWORD = '0000'; // 관리자 마스터 비밀번호
 
 export default function DryerReservationSystem() {
-  const today = getToday();
+  const today = getTodayKST();
   
   // 상태 관리 (로컬 스토리지 연동)
   const [reservations, setReservations] = useState(() => {
@@ -156,8 +164,8 @@ export default function DryerReservationSystem() {
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
   
-  // 모바일 브라우저 렌더링 강제 통일을 위한 강력한 클래스 적용
-  const inputClassName = "block w-full h-12 min-h-[48px] box-border px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-base bg-white m-0 appearance-none";
+  // 모바일 글자 치우침 방지를 위한 CSS 수정 (py-0, leading-[48px] 추가)
+  const inputClassName = "block w-full h-12 px-3 py-0 leading-[48px] box-border border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-base bg-white m-0 appearance-none text-slate-800 font-medium";
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800 pb-20">
@@ -205,7 +213,7 @@ export default function DryerReservationSystem() {
                       key={num}
                       type="button"
                       onClick={() => setFormData({ ...formData, dryerId: String(num) })}
-                      className={`flex-1 h-12 min-h-[48px] rounded-lg border font-medium transition-all box-border m-0 ${
+                      className={`flex-1 h-12 rounded-lg border font-bold transition-all box-border m-0 ${
                         formData.dryerId === String(num)
                           ? 'bg-indigo-50 border-indigo-500 text-indigo-700 shadow-inner'
                           : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -275,7 +283,7 @@ export default function DryerReservationSystem() {
                     onChange={handleInputChange}
                     required
                     placeholder="예: 뒷자리 1234"
-                    className={`${inputClassName} text-center tracking-widest font-bold`}
+                    className={`${inputClassName} text-center tracking-widest`}
                   />
                 </div>
                 <div>
@@ -289,7 +297,7 @@ export default function DryerReservationSystem() {
                     onChange={handleInputChange}
                     required
                     placeholder="숫자 4자리"
-                    className={`${inputClassName} text-center tracking-widest font-bold`}
+                    className={`${inputClassName} text-center tracking-widest`}
                   />
                 </div>
               </div>
@@ -315,7 +323,7 @@ export default function DryerReservationSystem() {
                 type="date"
                 value={viewDate}
                 onChange={(e) => setViewDate(e.target.value)}
-                className="bg-slate-50 border border-slate-200 p-2 rounded-lg text-sm font-semibold text-slate-800 outline-none h-10 box-border"
+                className="bg-slate-50 border border-slate-200 px-3 rounded-lg text-sm font-semibold text-slate-800 outline-none h-10 box-border"
               />
             </div>
 
@@ -399,7 +407,7 @@ export default function DryerReservationSystem() {
               value={authModal.passwordInput}
               onChange={(e) => setAuthModal({ ...authModal, passwordInput: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) })}
               placeholder="비밀번호 4자리"
-              className="w-full h-12 box-border text-center tracking-[0.5em] text-2xl p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none mb-2 font-bold"
+              className="w-full h-12 py-0 leading-[48px] box-border text-center tracking-[0.5em] text-2xl px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none mb-2 font-bold"
               autoFocus
             />
             
