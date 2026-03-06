@@ -1,51 +1,55 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Wind, User, AlertCircle, CheckCircle2, Info, Lock, Trash2, Edit2, X } from 'lucide-react';
 
-// 유틸리티: 'HH:mm' -> 분(minute) 변환
+// --- Firebase 연결 설정 ---
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDJ4wgVNjQI6sM70J5MbITbpY-LdlIcJbc",
+  authDomain: "laundry-app-7bf6c.firebaseapp.com",
+  projectId: "laundry-app-7bf6c",
+  storageBucket: "laundry-app-7bf6c.firebasestorage.app",
+  messagingSenderId: "751343149507",
+  appId: "1:751343149507:web:e6f6179a18a6f1505c9d76"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+// --------------------------
+
 const timeToMinutes = (time) => {
   const [hours, minutes] = time.split(':').map(Number);
   return hours * 60 + minutes;
 };
 
-// 유틸리티: 한국 표준시(KST) 기준 오늘 날짜 'YYYY-MM-DD' 반환
 const getTodayKST = () => {
   const now = new Date();
   const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const kst = new Date(utc + (9 * 3600000)); // UTC + 9시간
-  
+  const kst = new Date(utc + (9 * 3600000));
   const year = kst.getFullYear();
   const month = String(kst.getMonth() + 1).padStart(2, '0');
   const day = String(kst.getDate()).padStart(2, '0');
-  
   return `${year}-${month}-${day}`;
 };
 
-const ADMIN_PASSWORD = '0000'; // 관리자 마스터 비밀번호
+const ADMIN_PASSWORD = '0000';
 
 export default function DryerReservationSystem() {
   const today = getTodayKST();
   
-  // 상태 관리 (로컬 스토리지 연동)
-  const [reservations, setReservations] = useState(() => {
-    const saved = localStorage.getItem('dryerReservations');
-    if (saved) {
-      return JSON.parse(saved);
-    }
-    return [];
-  });
-
+  const [reservations, setReservations] = useState([]); // 빈 배열로 시작
   const [message, setMessage] = useState(null);
   const [viewDate, setViewDate] = useState(today);
   const [editingId, setEditingId] = useState(null);
 
-  // 예약 폼 데이터
   const [formData, setFormData] = useState({
     dryerId: '1',
     date: today,
     startTime: '12:00',
     duration: 60,
-    userId: '',   // 식별번호
-    password: '', // 비밀번호
+    userId: '',
+    password: '',
   });
 
   const [authModal, setAuthModal] = useState({
@@ -55,16 +59,24 @@ export default function DryerReservationSystem() {
     error: '',
   });
 
-  // 예약 데이터 자동 저장
+  // ⭐️ 핵심 변경: Firebase 실시간 데이터 불러오기
   useEffect(() => {
-    localStorage.setItem('dryerReservations', JSON.stringify(reservations));
-  }, [reservations]);
+    // 'reservations'라는 컬렉션(게시판)을 실시간으로 구독합니다.
+    const unsubscribe = onSnapshot(collection(db, 'reservations'), (snapshot) => {
+      const dbData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setReservations(dbData);
+    });
+
+    return () => unsubscribe(); // 컴포넌트 종료 시 구독 해제
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'duration') {
-      const val = parseInt(value, 10);
-      if (val > 90) return;
+      if (parseInt(value, 10) > 90) return;
     }
     if (name === 'userId' || name === 'password') {
       const val = value.replace(/[^0-9]/g, '').slice(0, 4);
@@ -74,21 +86,13 @@ export default function DryerReservationSystem() {
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleSubmit = (e) => {
+  // ⭐️ 핵심 변경: Firebase에 데이터 저장/수정하기
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (formData.userId.length !== 4) {
-      showMessage('error', '식별번호 4자리를 정확히 입력해주세요.');
-      return;
-    }
-    if (formData.password.length !== 4) {
-      showMessage('error', '비밀번호 4자리를 정확히 입력해주세요.');
-      return;
-    }
-    if (!formData.duration || formData.duration <= 0) {
-      showMessage('error', '올바른 이용 시간을 입력해주세요.');
-      return;
-    }
+    if (formData.userId.length !== 4) return showMessage('error', '식별번호 4자리를 정확히 입력해주세요.');
+    if (formData.password.length !== 4) return showMessage('error', '비밀번호 4자리를 정확히 입력해주세요.');
+    if (!formData.duration || formData.duration <= 0) return showMessage('error', '올바른 이용 시간을 입력해주세요.');
 
     const newStart = timeToMinutes(formData.startTime);
     const newEnd = newStart + parseInt(formData.duration, 10);
@@ -101,44 +105,46 @@ export default function DryerReservationSystem() {
       return newStart < resEnd && newEnd > resStart;
     });
 
-    if (isOverlapping) {
-      showMessage('error', '선택한 시간에 이미 예약이 존재합니다.');
-      return;
-    }
+    if (isOverlapping) return showMessage('error', '선택한 시간에 이미 예약이 존재합니다.');
 
     const durationInt = parseInt(formData.duration, 10);
 
-    if (editingId) {
-      setReservations(reservations.map(res => 
-        res.id === editingId ? { ...formData, id: editingId, duration: durationInt } : res
-      ));
-      showMessage('success', '예약이 성공적으로 수정되었습니다.');
-      setEditingId(null);
-    } else {
-      const newReservation = { ...formData, id: Date.now(), duration: durationInt };
-      setReservations([...reservations, newReservation]);
-      showMessage('success', `건조기 ${formData.dryerId}번 예약이 완료되었습니다.`);
+    try {
+      if (editingId) {
+        // 기존 문서 수정
+        const docRef = doc(db, 'reservations', editingId);
+        await updateDoc(docRef, { ...formData, duration: durationInt });
+        showMessage('success', '예약이 성공적으로 수정되었습니다.');
+        setEditingId(null);
+      } else {
+        // 새 문서 추가
+        await addDoc(collection(db, 'reservations'), { ...formData, duration: durationInt });
+        showMessage('success', `건조기 ${formData.dryerId}번 예약이 완료되었습니다.`);
+      }
+      setViewDate(formData.date);
+      setFormData({ ...formData, userId: '', password: '' });
+    } catch (error) {
+      console.error("Error saving document: ", error);
+      showMessage('error', '서버 저장 중 오류가 발생했습니다.');
     }
-
-    setViewDate(formData.date);
-    setFormData({ ...formData, userId: '', password: '' });
   };
 
-  const openAuthModal = (reservation) => {
-    setAuthModal({ isOpen: true, reservation, passwordInput: '', error: '' });
-  };
+  const openAuthModal = (reservation) => setAuthModal({ isOpen: true, reservation, passwordInput: '', error: '' });
+  const closeAuthModal = () => setAuthModal({ isOpen: false, reservation: null, passwordInput: '', error: '' });
 
-  const closeAuthModal = () => {
-    setAuthModal({ isOpen: false, reservation: null, passwordInput: '', error: '' });
-  };
-
-  const handleAuthAction = (actionType) => {
+  // ⭐️ 핵심 변경: Firebase에서 데이터 삭제하기
+  const handleAuthAction = async (actionType) => {
     const { reservation, passwordInput } = authModal;
     
     if (passwordInput === reservation.password || passwordInput === ADMIN_PASSWORD) {
       if (actionType === 'delete') {
-        setReservations(reservations.filter(res => res.id !== reservation.id));
-        showMessage('success', '예약이 삭제되었습니다.');
+        try {
+          await deleteDoc(doc(db, 'reservations', reservation.id));
+          showMessage('success', '예약이 삭제되었습니다.');
+        } catch (error) {
+          console.error("Error deleting document: ", error);
+          showMessage('error', '삭제 중 오류가 발생했습니다.');
+        }
       } else if (actionType === 'edit') {
         setFormData({
           dryerId: reservation.dryerId,
@@ -163,8 +169,6 @@ export default function DryerReservationSystem() {
   };
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
-  
-  // 모바일 글자 치우침 방지를 위한 CSS 수정 (py-0, leading-[48px] 추가)
   const inputClassName = "block w-full h-12 px-3 py-0 leading-[48px] box-border border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-base bg-white m-0 appearance-none text-slate-800 font-medium";
 
   return (
@@ -178,6 +182,11 @@ export default function DryerReservationSystem() {
             </div>
             <h1 className="text-2xl font-bold text-slate-900">강원학사(도봉) 건조기 예약 시스템</h1>
           </div>
+          {/* 실시간 연동 표시 배지 추가 */}
+          <div className="hidden sm:flex items-center text-xs text-green-600 bg-green-50 px-3 py-1.5 rounded-full border border-green-200 font-bold">
+            <span className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
+            서버 실시간 연동 중
+          </div>
         </header>
 
         {message && (
@@ -188,7 +197,6 @@ export default function DryerReservationSystem() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
           <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-1 h-fit lg:sticky lg:top-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold flex items-center">
@@ -330,7 +338,6 @@ export default function DryerReservationSystem() {
             <p className="text-xs text-slate-500 mb-4">* 타임라인의 예약 블록을 클릭하면 수정/삭제가 가능합니다.</p>
 
             <div className="flex-1 border border-slate-200 rounded-xl overflow-hidden flex flex-col bg-slate-50">
-              
               <div className="flex border-b border-slate-200 bg-white shadow-sm z-10">
                 <div className="w-16 shrink-0 border-r border-slate-100"></div>
                 {[1, 2, 3].map(d => (
@@ -342,7 +349,6 @@ export default function DryerReservationSystem() {
 
               <div className="flex-1 overflow-y-auto relative custom-scrollbar">
                 <div className="relative flex" style={{ height: '1440px' }}>
-                  
                   <div className="w-16 shrink-0 border-r border-slate-200 relative bg-white">
                     {hours.map(h => (
                       <div key={h} className="absolute w-full text-right pr-2 text-xs text-slate-400 font-medium -translate-y-2" style={{ top: `${h * 60}px` }}>
