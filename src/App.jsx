@@ -30,14 +30,14 @@ export default function DryerReservationSystem() {
   const [viewDate, setViewDate] = useState(today);
   const [editingId, setEditingId] = useState(null);
 
-  // 예약 폼 데이터 (식별용 userId와 인증용 password 분리)
+  // 예약 폼 데이터
   const [formData, setFormData] = useState({
     dryerId: '1',
     date: today,
     startTime: '12:00',
     duration: 60,
-    userId: '',   // 식별번호 (연락처 뒤 4자리 - 타임라인 노출)
-    password: '', // 비밀번호 (수정/삭제용 - 숨김)
+    userId: '',   // 식별번호
+    password: '', // 비밀번호
   });
 
   const [authModal, setAuthModal] = useState({
@@ -58,7 +58,6 @@ export default function DryerReservationSystem() {
       const val = parseInt(value, 10);
       if (val > 90) return;
     }
-    // userId와 password 모두 숫자 4자리로 제한
     if (name === 'userId' || name === 'password') {
       const val = value.replace(/[^0-9]/g, '').slice(0, 4);
       setFormData({ ...formData, [name]: val });
@@ -114,7 +113,6 @@ export default function DryerReservationSystem() {
     }
 
     setViewDate(formData.date);
-    // 폼 초기화 시 비밀번호 영역 비우기
     setFormData({ ...formData, userId: '', password: '' });
   };
 
@@ -129,7 +127,6 @@ export default function DryerReservationSystem() {
   const handleAuthAction = (actionType) => {
     const { reservation, passwordInput } = authModal;
     
-    // 입력한 비밀번호가 해당 예약의 진짜 비밀번호이거나 관리자(0000)일 때만 통과
     if (passwordInput === reservation.password || passwordInput === ADMIN_PASSWORD) {
       if (actionType === 'delete') {
         setReservations(reservations.filter(res => res.id !== reservation.id));
@@ -141,7 +138,7 @@ export default function DryerReservationSystem() {
           startTime: reservation.startTime,
           duration: reservation.duration,
           userId: reservation.userId,
-          password: '', // 수정 폼으로 갈 때 비밀번호는 새로 치도록 비워둠
+          password: '', 
         });
         setEditingId(reservation.id);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -158,7 +155,9 @@ export default function DryerReservationSystem() {
   };
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
-  const inputClassName = "w-full h-12 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-base bg-white";
+  
+  // 모바일 브라우저 렌더링 강제 통일을 위한 강력한 클래스 적용
+  const inputClassName = "block w-full h-12 min-h-[48px] box-border px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-base bg-white m-0 appearance-none";
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800 pb-20">
@@ -206,7 +205,7 @@ export default function DryerReservationSystem() {
                       key={num}
                       type="button"
                       onClick={() => setFormData({ ...formData, dryerId: String(num) })}
-                      className={`flex-1 h-12 rounded-lg border font-medium transition-all ${
+                      className={`flex-1 h-12 min-h-[48px] rounded-lg border font-medium transition-all box-border m-0 ${
                         formData.dryerId === String(num)
                           ? 'bg-indigo-50 border-indigo-500 text-indigo-700 shadow-inner'
                           : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -264,7 +263,6 @@ export default function DryerReservationSystem() {
                 </div>
               </div>
 
-              {/* 사용자 식별번호 & 비밀번호 분리 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
@@ -277,7 +275,7 @@ export default function DryerReservationSystem() {
                     onChange={handleInputChange}
                     required
                     placeholder="예: 뒷자리 1234"
-                    className={`${inputClassName} text-center tracking-widest text-lg font-bold`}
+                    className={`${inputClassName} text-center tracking-widest font-bold`}
                   />
                 </div>
                 <div>
@@ -291,7 +289,7 @@ export default function DryerReservationSystem() {
                     onChange={handleInputChange}
                     required
                     placeholder="숫자 4자리"
-                    className={`${inputClassName} text-center tracking-widest text-lg font-bold`}
+                    className={`${inputClassName} text-center tracking-widest font-bold`}
                   />
                 </div>
               </div>
@@ -317,7 +315,7 @@ export default function DryerReservationSystem() {
                 type="date"
                 value={viewDate}
                 onChange={(e) => setViewDate(e.target.value)}
-                className="bg-slate-50 border border-slate-200 p-2 rounded-lg text-sm font-semibold text-slate-800 outline-none h-10"
+                className="bg-slate-50 border border-slate-200 p-2 rounded-lg text-sm font-semibold text-slate-800 outline-none h-10 box-border"
               />
             </div>
 
@@ -401,7 +399,7 @@ export default function DryerReservationSystem() {
               value={authModal.passwordInput}
               onChange={(e) => setAuthModal({ ...authModal, passwordInput: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) })}
               placeholder="비밀번호 4자리"
-              className="w-full text-center tracking-[0.5em] text-2xl p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none mb-2 font-bold"
+              className="w-full h-12 box-border text-center tracking-[0.5em] text-2xl p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none mb-2 font-bold"
               autoFocus
             />
             
@@ -412,13 +410,13 @@ export default function DryerReservationSystem() {
             <div className="grid grid-cols-2 gap-3 mt-6">
               <button 
                 onClick={() => handleAuthAction('edit')}
-                className="flex items-center justify-center py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors h-12"
+                className="flex items-center justify-center py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors h-12 box-border"
               >
                 <Edit2 size={16} className="mr-1.5" /> 수정
               </button>
               <button 
                 onClick={() => handleAuthAction('delete')}
-                className="flex items-center justify-center py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold transition-colors h-12"
+                className="flex items-center justify-center py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold transition-colors h-12 box-border"
               >
                 <Trash2 size={16} className="mr-1.5" /> 삭제
               </button>
