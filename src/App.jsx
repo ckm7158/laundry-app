@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Calendar, Clock, Wind, User, AlertCircle, CheckCircle2, Info, Lock, Trash2, Edit2, X, ShieldAlert } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Clock, Wind, User, AlertCircle, CheckCircle2, Info, Lock, Trash2, Edit2, X } from 'lucide-react';
 
 // 유틸리티: 'HH:mm' -> 분(minute) 변환
 const timeToMinutes = (time) => {
@@ -12,16 +12,23 @@ const getToday = () => {
   return new Date().toISOString().split('T')[0];
 };
 
-const ADMIN_PASSWORD = '0000'; // 관리자 마스터 비밀번호
+const ADMIN_PASSWORD = '0000'; // 관리자 마스터 비밀번호 (화면에는 노출되지 않음)
 
 export default function DryerReservationSystem() {
   const today = getToday();
   
-  // 상태 관리
-  const [reservations, setReservations] = useState([]);
+  // 상태 관리 (로컬 스토리지에서 초기값 불러오기)
+  const [reservations, setReservations] = useState(() => {
+    const saved = localStorage.getItem('dryerReservations');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    return [];
+  });
+
   const [message, setMessage] = useState(null);
   const [viewDate, setViewDate] = useState(today);
-  const [editingId, setEditingId] = useState(null); // 수정 중인 예약 ID
+  const [editingId, setEditingId] = useState(null);
 
   const [formData, setFormData] = useState({
     dryerId: '1',
@@ -31,7 +38,6 @@ export default function DryerReservationSystem() {
     userId: '',
   });
 
-  // 권한 확인 모달 상태
   const [authModal, setAuthModal] = useState({
     isOpen: false,
     reservation: null,
@@ -39,7 +45,12 @@ export default function DryerReservationSystem() {
     error: '',
   });
 
-  // 1. 폼 입력 핸들러
+  // 예약 데이터가 변경될 때마다 로컬 스토리지에 자동 저장
+  useEffect(() => {
+    localStorage.setItem('dryerReservations', JSON.stringify(reservations));
+  }, [reservations]);
+
+  // 폼 입력 핸들러
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'duration') {
@@ -54,7 +65,7 @@ export default function DryerReservationSystem() {
     setFormData({ ...formData, [name]: value });
   };
 
-  // 2. 예약 폼 제출 (생성 및 수정)
+  // 예약 폼 제출 핸들러
   const handleSubmit = (e) => {
     e.preventDefault();
     
@@ -70,7 +81,6 @@ export default function DryerReservationSystem() {
     const newStart = timeToMinutes(formData.startTime);
     const newEnd = newStart + parseInt(formData.duration, 10);
 
-    // 중복 예약 검증 (수정 중인 본인 예약은 제외)
     const isOverlapping = reservations.some((res) => {
       if (editingId && res.id === editingId) return false; 
       if (res.dryerId !== formData.dryerId || res.date !== formData.date) return false;
@@ -87,24 +97,22 @@ export default function DryerReservationSystem() {
     const durationInt = parseInt(formData.duration, 10);
 
     if (editingId) {
-      // 수정 모드
       setReservations(reservations.map(res => 
         res.id === editingId ? { ...formData, id: editingId, duration: durationInt } : res
       ));
       showMessage('success', '예약이 성공적으로 수정되었습니다.');
       setEditingId(null);
     } else {
-      // 신규 생성 모드
       const newReservation = { ...formData, id: Date.now(), duration: durationInt };
       setReservations([...reservations, newReservation]);
       showMessage('success', `건조기 ${formData.dryerId}번 예약이 완료되었습니다.`);
     }
 
     setViewDate(formData.date);
-    setFormData({ ...formData, userId: '' }); // 비밀번호만 비우기
+    setFormData({ ...formData, userId: '' });
   };
 
-  // 3. 권한 모달 열기/닫기 및 처리
+  // 권한 모달 처리
   const openAuthModal = (reservation) => {
     setAuthModal({ isOpen: true, reservation, passwordInput: '', error: '' });
   };
@@ -116,7 +124,6 @@ export default function DryerReservationSystem() {
   const handleAuthAction = (actionType) => {
     const { reservation, passwordInput } = authModal;
     
-    // 본인 비밀번호이거나 관리자(0000)인 경우 통과
     if (passwordInput === reservation.userId || passwordInput === ADMIN_PASSWORD) {
       if (actionType === 'delete') {
         setReservations(reservations.filter(res => res.id !== reservation.id));
@@ -127,10 +134,10 @@ export default function DryerReservationSystem() {
           date: reservation.date,
           startTime: reservation.startTime,
           duration: reservation.duration,
-          userId: '', // 수정 시에도 비밀번호는 새로 입력받도록 비워둠
+          userId: '',
         });
         setEditingId(reservation.id);
-        window.scrollTo({ top: 0, behavior: 'smooth' }); // 폼으로 스크롤 이동
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
       closeAuthModal();
     } else {
@@ -138,13 +145,15 @@ export default function DryerReservationSystem() {
     }
   };
 
-  // 알림 메시지 헬퍼
   const showMessage = (type, text) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3000);
   };
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
+  
+  // 공통 입력칸 스타일 (크기 통일)
+  const inputClassName = "w-full h-12 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-base bg-white";
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800 pb-20">
@@ -158,10 +167,7 @@ export default function DryerReservationSystem() {
             </div>
             <h1 className="text-2xl font-bold text-slate-900">공용 건조기 예약 시스템</h1>
           </div>
-          <div className="hidden sm:flex items-center text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
-            <ShieldAlert size={14} className="mr-1" />
-            관리자 마스터 PW: 0000
-          </div>
+          {/* 관리자 비밀번호 노출 부분 삭제됨 */}
         </header>
 
         {/* 알림 메시지 */}
@@ -174,8 +180,8 @@ export default function DryerReservationSystem() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* 왼쪽: 예약 폼 */}
-          <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-1 h-fit sticky top-6">
+          {/* 왼쪽: 예약 폼 (lg:sticky를 사용하여 PC에서만 상단 고정, 모바일 겹침 방지) */}
+          <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-1 h-fit lg:sticky lg:top-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold flex items-center">
                 {editingId ? <Edit2 className="mr-2 text-amber-500" size={20} /> : <Calendar className="mr-2 text-indigo-500" size={20} />}
@@ -200,7 +206,7 @@ export default function DryerReservationSystem() {
                       key={num}
                       type="button"
                       onClick={() => setFormData({ ...formData, dryerId: String(num) })}
-                      className={`flex-1 py-2.5 rounded-lg border font-medium transition-all ${
+                      className={`flex-1 h-12 rounded-lg border font-medium transition-all ${
                         formData.dryerId === String(num)
                           ? 'bg-indigo-50 border-indigo-500 text-indigo-700 shadow-inner'
                           : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -223,11 +229,11 @@ export default function DryerReservationSystem() {
                   value={formData.date}
                   onChange={handleInputChange}
                   required
-                  className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  className={inputClassName}
                 />
               </div>
 
-              {/* 시작 시간 & 이용 시간 (모바일에서 겹치지 않도록 sm:grid-cols-2 적용) */}
+              {/* 시작 시간 & 이용 시간 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
@@ -239,7 +245,7 @@ export default function DryerReservationSystem() {
                     value={formData.startTime}
                     onChange={handleInputChange}
                     required
-                    className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    className={inputClassName}
                   />
                 </div>
                 <div>
@@ -255,7 +261,7 @@ export default function DryerReservationSystem() {
                     onChange={handleInputChange}
                     required
                     placeholder="최대 90분"
-                    className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    className={inputClassName}
                   />
                 </div>
               </div>
@@ -272,13 +278,13 @@ export default function DryerReservationSystem() {
                   onChange={handleInputChange}
                   required
                   placeholder="예: 1234"
-                  className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-center tracking-widest text-lg"
+                  className={`${inputClassName} text-center tracking-widest text-lg font-bold`}
                 />
               </div>
 
               <button
                 type="submit"
-                className={`w-full font-bold py-3 px-4 rounded-xl shadow-md transition-all active:scale-[0.98] text-white ${
+                className={`w-full font-bold h-14 mt-2 rounded-xl shadow-md transition-all active:scale-[0.98] text-white ${
                   editingId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-indigo-600 hover:bg-indigo-700'
                 }`}
               >
@@ -298,7 +304,7 @@ export default function DryerReservationSystem() {
                 type="date"
                 value={viewDate}
                 onChange={(e) => setViewDate(e.target.value)}
-                className="bg-slate-50 border border-slate-200 p-2 rounded-lg text-sm font-semibold text-slate-800 outline-none"
+                className="bg-slate-50 border border-slate-200 p-2 rounded-lg text-sm font-semibold text-slate-800 outline-none h-10"
               />
             </div>
 
@@ -367,7 +373,7 @@ export default function DryerReservationSystem() {
         </div>
       </div>
 
-      {/* 권한 확인 모달 (수정/삭제 시) */}
+      {/* 권한 확인 모달 */}
       {authModal.isOpen && (
         <div className="fixed inset-0 bg-slate-900 bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl relative animate-in fade-in zoom-in duration-200">
@@ -381,7 +387,7 @@ export default function DryerReservationSystem() {
               </div>
               <h3 className="text-xl font-bold text-slate-800">예약 권한 확인</h3>
               <p className="text-sm text-slate-500 mt-1">
-                예약 시 입력한 4자리 숫자를 입력하세요.<br/>(관리자는 0000)
+                예약 시 입력한 비밀번호를 입력하세요.
               </p>
             </div>
 
@@ -390,7 +396,7 @@ export default function DryerReservationSystem() {
               value={authModal.passwordInput}
               onChange={(e) => setAuthModal({ ...authModal, passwordInput: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) })}
               placeholder="비밀번호 4자리"
-              className="w-full text-center tracking-[0.5em] text-2xl p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none mb-2"
+              className="w-full text-center tracking-[0.5em] text-2xl p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none mb-2 font-bold"
               autoFocus
             />
             
@@ -401,13 +407,13 @@ export default function DryerReservationSystem() {
             <div className="grid grid-cols-2 gap-3 mt-6">
               <button 
                 onClick={() => handleAuthAction('edit')}
-                className="flex items-center justify-center py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors"
+                className="flex items-center justify-center py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors h-12"
               >
                 <Edit2 size={16} className="mr-1.5" /> 수정
               </button>
               <button 
                 onClick={() => handleAuthAction('delete')}
-                className="flex items-center justify-center py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold transition-colors"
+                className="flex items-center justify-center py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold transition-colors h-12"
               >
                 <Trash2 size={16} className="mr-1.5" /> 삭제
               </button>
