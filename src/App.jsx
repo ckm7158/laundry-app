@@ -176,7 +176,7 @@ export default function DryerReservationSystem() {
             <div className="bg-indigo-600 p-2 rounded-xl text-white">
               <Wind size={28} />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900">공용 건조기 예약 시스템</h1>
+            <h1 className="text-2xl font-bold text-slate-900">강원학사(도봉) 건조기 예약 시스템</h1>
           </div>
         </header>
 
