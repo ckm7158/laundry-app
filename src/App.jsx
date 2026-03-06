@@ -12,12 +12,12 @@ const getToday = () => {
   return new Date().toISOString().split('T')[0];
 };
 
-const ADMIN_PASSWORD = '0000'; // 관리자 마스터 비밀번호 (화면에는 노출되지 않음)
+const ADMIN_PASSWORD = '0000'; // 관리자 마스터 비밀번호
 
 export default function DryerReservationSystem() {
   const today = getToday();
   
-  // 상태 관리 (로컬 스토리지에서 초기값 불러오기)
+  // 상태 관리 (로컬 스토리지 연동)
   const [reservations, setReservations] = useState(() => {
     const saved = localStorage.getItem('dryerReservations');
     if (saved) {
@@ -30,12 +30,14 @@ export default function DryerReservationSystem() {
   const [viewDate, setViewDate] = useState(today);
   const [editingId, setEditingId] = useState(null);
 
+  // 예약 폼 데이터 (식별용 userId와 인증용 password 분리)
   const [formData, setFormData] = useState({
     dryerId: '1',
     date: today,
     startTime: '12:00',
     duration: 60,
-    userId: '',
+    userId: '',   // 식별번호 (연락처 뒤 4자리 - 타임라인 노출)
+    password: '', // 비밀번호 (수정/삭제용 - 숨김)
   });
 
   const [authModal, setAuthModal] = useState({
@@ -45,19 +47,19 @@ export default function DryerReservationSystem() {
     error: '',
   });
 
-  // 예약 데이터가 변경될 때마다 로컬 스토리지에 자동 저장
+  // 예약 데이터 자동 저장
   useEffect(() => {
     localStorage.setItem('dryerReservations', JSON.stringify(reservations));
   }, [reservations]);
 
-  // 폼 입력 핸들러
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'duration') {
       const val = parseInt(value, 10);
       if (val > 90) return;
     }
-    if (name === 'userId') {
+    // userId와 password 모두 숫자 4자리로 제한
+    if (name === 'userId' || name === 'password') {
       const val = value.replace(/[^0-9]/g, '').slice(0, 4);
       setFormData({ ...formData, [name]: val });
       return;
@@ -65,12 +67,15 @@ export default function DryerReservationSystem() {
     setFormData({ ...formData, [name]: value });
   };
 
-  // 예약 폼 제출 핸들러
   const handleSubmit = (e) => {
     e.preventDefault();
     
     if (formData.userId.length !== 4) {
-      showMessage('error', '전화번호 뒷자리 4자리를 정확히 입력해주세요.');
+      showMessage('error', '식별번호 4자리를 정확히 입력해주세요.');
+      return;
+    }
+    if (formData.password.length !== 4) {
+      showMessage('error', '비밀번호 4자리를 정확히 입력해주세요.');
       return;
     }
     if (!formData.duration || formData.duration <= 0) {
@@ -109,10 +114,10 @@ export default function DryerReservationSystem() {
     }
 
     setViewDate(formData.date);
-    setFormData({ ...formData, userId: '' });
+    // 폼 초기화 시 비밀번호 영역 비우기
+    setFormData({ ...formData, userId: '', password: '' });
   };
 
-  // 권한 모달 처리
   const openAuthModal = (reservation) => {
     setAuthModal({ isOpen: true, reservation, passwordInput: '', error: '' });
   };
@@ -124,7 +129,8 @@ export default function DryerReservationSystem() {
   const handleAuthAction = (actionType) => {
     const { reservation, passwordInput } = authModal;
     
-    if (passwordInput === reservation.userId || passwordInput === ADMIN_PASSWORD) {
+    // 입력한 비밀번호가 해당 예약의 진짜 비밀번호이거나 관리자(0000)일 때만 통과
+    if (passwordInput === reservation.password || passwordInput === ADMIN_PASSWORD) {
       if (actionType === 'delete') {
         setReservations(reservations.filter(res => res.id !== reservation.id));
         showMessage('success', '예약이 삭제되었습니다.');
@@ -134,7 +140,8 @@ export default function DryerReservationSystem() {
           date: reservation.date,
           startTime: reservation.startTime,
           duration: reservation.duration,
-          userId: '',
+          userId: reservation.userId,
+          password: '', // 수정 폼으로 갈 때 비밀번호는 새로 치도록 비워둠
         });
         setEditingId(reservation.id);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -151,15 +158,12 @@ export default function DryerReservationSystem() {
   };
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
-  
-  // 공통 입력칸 스타일 (크기 통일)
   const inputClassName = "w-full h-12 px-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-base bg-white";
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800 pb-20">
       <div className="max-w-6xl mx-auto space-y-6">
         
-        {/* 헤더 */}
         <header className="flex items-center justify-between pb-4 border-b border-slate-200">
           <div className="flex items-center space-x-3">
             <div className="bg-indigo-600 p-2 rounded-xl text-white">
@@ -167,10 +171,8 @@ export default function DryerReservationSystem() {
             </div>
             <h1 className="text-2xl font-bold text-slate-900">공용 건조기 예약 시스템</h1>
           </div>
-          {/* 관리자 비밀번호 노출 부분 삭제됨 */}
         </header>
 
-        {/* 알림 메시지 */}
         {message && (
           <div className={`flex items-center p-4 rounded-xl shadow-sm ${message.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
             {message.type === 'error' ? <AlertCircle className="mr-2" size={20} /> : <CheckCircle2 className="mr-2" size={20} />}
@@ -180,7 +182,6 @@ export default function DryerReservationSystem() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* 왼쪽: 예약 폼 (lg:sticky를 사용하여 PC에서만 상단 고정, 모바일 겹침 방지) */}
           <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-1 h-fit lg:sticky lg:top-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold flex items-center">
@@ -188,14 +189,13 @@ export default function DryerReservationSystem() {
                 {editingId ? '예약 수정하기' : '신규 예약'}
               </h2>
               {editingId && (
-                <button onClick={() => { setEditingId(null); setFormData({...formData, userId: ''}); }} className="text-sm text-slate-400 hover:text-slate-600 underline">
+                <button onClick={() => { setEditingId(null); setFormData({...formData, userId: '', password: ''}); }} className="text-sm text-slate-400 hover:text-slate-600 underline">
                   취소
                 </button>
               )}
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* 건조기 선택 */}
               <div>
                 <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
                   <Wind className="mr-1.5" size={16} /> 대상 건조기
@@ -218,7 +218,6 @@ export default function DryerReservationSystem() {
                 </div>
               </div>
 
-              {/* 날짜 선택 */}
               <div>
                 <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
                   <Calendar className="mr-1.5" size={16} /> 날짜
@@ -233,7 +232,6 @@ export default function DryerReservationSystem() {
                 />
               </div>
 
-              {/* 시작 시간 & 이용 시간 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
@@ -266,20 +264,36 @@ export default function DryerReservationSystem() {
                 </div>
               </div>
 
-              {/* 사용자 ID (비밀번호) */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
-                  <User className="mr-1.5" size={16} /> 비밀번호 (연락처 뒤 4자리)
-                </label>
-                <input
-                  type="text"
-                  name="userId"
-                  value={formData.userId}
-                  onChange={handleInputChange}
-                  required
-                  placeholder="예: 1234"
-                  className={`${inputClassName} text-center tracking-widest text-lg font-bold`}
-                />
+              {/* 사용자 식별번호 & 비밀번호 분리 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
+                    <User className="mr-1.5" size={16} /> 노출용 식별번호
+                  </label>
+                  <input
+                    type="text"
+                    name="userId"
+                    value={formData.userId}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="예: 뒷자리 1234"
+                    className={`${inputClassName} text-center tracking-widest text-lg font-bold`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
+                    <Lock className="mr-1.5" size={16} /> 예약 비밀번호
+                  </label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="숫자 4자리"
+                    className={`${inputClassName} text-center tracking-widest text-lg font-bold`}
+                  />
+                </div>
               </div>
 
               <button
@@ -293,7 +307,6 @@ export default function DryerReservationSystem() {
             </form>
           </section>
 
-          {/* 오른쪽: 수직 타임라인 대시보드 */}
           <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-2 flex flex-col h-[800px]">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-bold flex items-center">
@@ -310,10 +323,8 @@ export default function DryerReservationSystem() {
 
             <p className="text-xs text-slate-500 mb-4">* 타임라인의 예약 블록을 클릭하면 수정/삭제가 가능합니다.</p>
 
-            {/* 수직 타임라인 컨테이너 */}
             <div className="flex-1 border border-slate-200 rounded-xl overflow-hidden flex flex-col bg-slate-50">
               
-              {/* 건조기 헤더 (고정) */}
               <div className="flex border-b border-slate-200 bg-white shadow-sm z-10">
                 <div className="w-16 shrink-0 border-r border-slate-100"></div>
                 {[1, 2, 3].map(d => (
@@ -323,11 +334,9 @@ export default function DryerReservationSystem() {
                 ))}
               </div>
 
-              {/* 스크롤 영역 (1시간 = 60px, 총 1440px) */}
               <div className="flex-1 overflow-y-auto relative custom-scrollbar">
                 <div className="relative flex" style={{ height: '1440px' }}>
                   
-                  {/* 시간 축 */}
                   <div className="w-16 shrink-0 border-r border-slate-200 relative bg-white">
                     {hours.map(h => (
                       <div key={h} className="absolute w-full text-right pr-2 text-xs text-slate-400 font-medium -translate-y-2" style={{ top: `${h * 60}px` }}>
@@ -336,17 +345,14 @@ export default function DryerReservationSystem() {
                     ))}
                   </div>
 
-                  {/* 건조기 1, 2, 3 트랙 */}
                   {[1, 2, 3].map(dryerNum => {
                     const trackReservations = reservations.filter(r => r.dryerId === String(dryerNum) && r.date === viewDate);
                     return (
                       <div key={dryerNum} className="flex-1 border-r border-slate-200 last:border-0 relative">
-                        {/* 1시간 단위 가로선 배경 */}
                         {hours.map(h => (
                           <div key={h} className="absolute w-full border-t border-slate-100" style={{ top: `${h * 60}px`, height: '60px' }}></div>
                         ))}
                         
-                        {/* 예약 블록 */}
                         {trackReservations.map(res => (
                           <div
                             key={res.id}
@@ -360,7 +366,7 @@ export default function DryerReservationSystem() {
                             }}
                           >
                             <div className="font-bold truncate">{res.startTime} ~</div>
-                            <div className="truncate opacity-90">{res.duration}분 (PW: {res.userId})</div>
+                            <div className="truncate opacity-90">{res.duration}분 (예약자: {res.userId})</div>
                           </div>
                         ))}
                       </div>
@@ -373,7 +379,6 @@ export default function DryerReservationSystem() {
         </div>
       </div>
 
-      {/* 권한 확인 모달 */}
       {authModal.isOpen && (
         <div className="fixed inset-0 bg-slate-900 bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl relative animate-in fade-in zoom-in duration-200">
@@ -387,12 +392,12 @@ export default function DryerReservationSystem() {
               </div>
               <h3 className="text-xl font-bold text-slate-800">예약 권한 확인</h3>
               <p className="text-sm text-slate-500 mt-1">
-                예약 시 입력한 비밀번호를 입력하세요.
+                예약 시 설정한 비밀번호를 입력하세요.
               </p>
             </div>
 
             <input
-              type="text"
+              type="password"
               value={authModal.passwordInput}
               onChange={(e) => setAuthModal({ ...authModal, passwordInput: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) })}
               placeholder="비밀번호 4자리"
