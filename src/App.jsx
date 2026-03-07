@@ -35,10 +35,26 @@ const getTodayKST = () => {
 
 const ADMIN_PASSWORD = '0000';
 
+// 건조기별 고유 테마 색상 정의 (눈이 편안한 파스텔/로우 채도 톤)
+const DRYER_THEMES = {
+  '1': {
+    timeline: 'bg-indigo-500 border-indigo-600',
+    btnChecked: 'bg-indigo-50 border-indigo-500 text-indigo-700 shadow-inner'
+  },
+  '2': {
+    timeline: 'bg-emerald-500 border-emerald-600',
+    btnChecked: 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-inner'
+  },
+  '3': {
+    timeline: 'bg-orange-400 border-orange-500',
+    btnChecked: 'bg-orange-50 border-orange-400 text-orange-700 shadow-inner'
+  }
+};
+
 export default function DryerReservationSystem() {
   const today = getTodayKST();
   
-  const [reservations, setReservations] = useState([]); // 빈 배열로 시작
+  const [reservations, setReservations] = useState([]);
   const [message, setMessage] = useState(null);
   const [viewDate, setViewDate] = useState(today);
   const [editingId, setEditingId] = useState(null);
@@ -59,18 +75,12 @@ export default function DryerReservationSystem() {
     error: '',
   });
 
-  // ⭐️ 핵심 변경: Firebase 실시간 데이터 불러오기
   useEffect(() => {
-    // 'reservations'라는 컬렉션(게시판)을 실시간으로 구독합니다.
     const unsubscribe = onSnapshot(collection(db, 'reservations'), (snapshot) => {
-      const dbData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const dbData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setReservations(dbData);
     });
-
-    return () => unsubscribe(); // 컴포넌트 종료 시 구독 해제
+    return () => unsubscribe();
   }, []);
 
   const handleInputChange = (e) => {
@@ -86,7 +96,6 @@ export default function DryerReservationSystem() {
     setFormData({ ...formData, [name]: value });
   };
 
-  // ⭐️ 핵심 변경: Firebase에 데이터 저장/수정하기
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -111,13 +120,11 @@ export default function DryerReservationSystem() {
 
     try {
       if (editingId) {
-        // 기존 문서 수정
         const docRef = doc(db, 'reservations', editingId);
         await updateDoc(docRef, { ...formData, duration: durationInt });
         showMessage('success', '예약이 성공적으로 수정되었습니다.');
         setEditingId(null);
       } else {
-        // 새 문서 추가
         await addDoc(collection(db, 'reservations'), { ...formData, duration: durationInt });
         showMessage('success', `건조기 ${formData.dryerId}번 예약이 완료되었습니다.`);
       }
@@ -132,10 +139,8 @@ export default function DryerReservationSystem() {
   const openAuthModal = (reservation) => setAuthModal({ isOpen: true, reservation, passwordInput: '', error: '' });
   const closeAuthModal = () => setAuthModal({ isOpen: false, reservation: null, passwordInput: '', error: '' });
 
-  // ⭐️ 핵심 변경: Firebase에서 데이터 삭제하기
   const handleAuthAction = async (actionType) => {
     const { reservation, passwordInput } = authModal;
-    
     if (passwordInput === reservation.password || passwordInput === ADMIN_PASSWORD) {
       if (actionType === 'delete') {
         try {
@@ -180,9 +185,8 @@ export default function DryerReservationSystem() {
             <div className="bg-indigo-600 p-2 rounded-xl text-white">
               <Wind size={28} />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900">강원학사(도봉) 건조기 예약 시스템</h1>
+            <h1 className="text-2xl font-bold text-slate-900">공용 건조기 예약 시스템</h1>
           </div>
-          {/* 실시간 연동 표시 배지 추가 */}
           <div className="hidden sm:flex items-center text-xs text-green-600 bg-green-50 px-3 py-1.5 rounded-full border border-green-200 font-bold">
             <span className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
             서버 실시간 연동 중
@@ -200,7 +204,7 @@ export default function DryerReservationSystem() {
           <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-1 h-fit lg:sticky lg:top-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold flex items-center">
-                {editingId ? <Edit2 className="mr-2 text-amber-500" size={20} /> : <Calendar className="mr-2 text-indigo-500" size={20} />}
+                {editingId ? <Edit2 className="mr-2 text-slate-600" size={20} /> : <Calendar className="mr-2 text-indigo-500" size={20} />}
                 {editingId ? '예약 수정하기' : '신규 예약'}
               </h2>
               {editingId && (
@@ -216,20 +220,22 @@ export default function DryerReservationSystem() {
                   <Wind className="mr-1.5" size={16} /> 대상 건조기
                 </label>
                 <div className="flex space-x-2">
-                  {[1, 2, 3].map((num) => (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, dryerId: String(num) })}
-                      className={`flex-1 h-12 rounded-lg border font-bold transition-all box-border m-0 ${
-                        formData.dryerId === String(num)
-                          ? 'bg-indigo-50 border-indigo-500 text-indigo-700 shadow-inner'
-                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      {num}번
-                    </button>
-                  ))}
+                  {[1, 2, 3].map((num) => {
+                    const theme = DRYER_THEMES[String(num)];
+                    const isSelected = formData.dryerId === String(num);
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, dryerId: String(num) })}
+                        className={`flex-1 h-12 rounded-lg border font-bold transition-all box-border m-0 ${
+                          isSelected ? theme.btnChecked : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        건조기 {num}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -237,14 +243,7 @@ export default function DryerReservationSystem() {
                 <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
                   <Calendar className="mr-1.5" size={16} /> 날짜
                 </label>
-                <input
-                  type="date"
-                  name="date"
-                  value={formData.date}
-                  onChange={handleInputChange}
-                  required
-                  className={inputClassName}
-                />
+                <input type="date" name="date" value={formData.date} onChange={handleInputChange} required className={inputClassName} />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -252,30 +251,13 @@ export default function DryerReservationSystem() {
                   <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
                     <Clock className="mr-1.5" size={16} /> 시작 시간
                   </label>
-                  <input
-                    type="time"
-                    name="startTime"
-                    value={formData.startTime}
-                    onChange={handleInputChange}
-                    required
-                    className={inputClassName}
-                  />
+                  <input type="time" name="startTime" value={formData.startTime} onChange={handleInputChange} required className={inputClassName} />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
                     <Clock className="mr-1.5" size={16} /> 이용 시간 (분)
                   </label>
-                  <input
-                    type="number"
-                    name="duration"
-                    min="10"
-                    max="90"
-                    value={formData.duration}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="최대 90분"
-                    className={inputClassName}
-                  />
+                  <input type="number" name="duration" min="10" max="90" value={formData.duration} onChange={handleInputChange} required placeholder="최대 90분" className={inputClassName} />
                 </div>
               </div>
 
@@ -284,36 +266,20 @@ export default function DryerReservationSystem() {
                   <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
                     <User className="mr-1.5" size={16} /> 노출용 식별번호
                   </label>
-                  <input
-                    type="text"
-                    name="userId"
-                    value={formData.userId}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="예: 뒷자리 1234"
-                    className={`${inputClassName} text-center tracking-widest`}
-                  />
+                  <input type="text" name="userId" value={formData.userId} onChange={handleInputChange} required placeholder="예: 뒷자리 1234" className={`${inputClassName} text-center tracking-widest`} />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-600 mb-2 flex items-center">
                     <Lock className="mr-1.5" size={16} /> 예약 비밀번호
                   </label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="숫자 4자리"
-                    className={`${inputClassName} text-center tracking-widest`}
-                  />
+                  <input type="password" name="password" value={formData.password} onChange={handleInputChange} required placeholder="숫자 4자리" className={`${inputClassName} text-center tracking-widest`} />
                 </div>
               </div>
 
               <button
                 type="submit"
                 className={`w-full font-bold h-14 mt-2 rounded-xl shadow-md transition-all active:scale-[0.98] text-white ${
-                  editingId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-indigo-600 hover:bg-indigo-700'
+                  editingId ? 'bg-slate-700 hover:bg-slate-800' : 'bg-indigo-600 hover:bg-indigo-700'
                 }`}
               >
                 {editingId ? '수정 내용 저장하기' : '예약 확정하기'}
@@ -327,12 +293,7 @@ export default function DryerReservationSystem() {
                 <Info className="mr-2 text-indigo-500" size={20} />
                 예약 타임라인
               </h2>
-              <input
-                type="date"
-                value={viewDate}
-                onChange={(e) => setViewDate(e.target.value)}
-                className="bg-slate-50 border border-slate-200 px-3 rounded-lg text-sm font-semibold text-slate-800 outline-none h-10 box-border"
-              />
+              <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} className="bg-slate-50 border border-slate-200 px-3 rounded-lg text-sm font-semibold text-slate-800 outline-none h-10 box-border" />
             </div>
 
             <p className="text-xs text-slate-500 mb-4">* 타임라인의 예약 블록을 클릭하면 수정/삭제가 가능합니다.</p>
@@ -365,22 +326,29 @@ export default function DryerReservationSystem() {
                           <div key={h} className="absolute w-full border-t border-slate-100" style={{ top: `${h * 60}px`, height: '60px' }}></div>
                         ))}
                         
-                        {trackReservations.map(res => (
-                          <div
-                            key={res.id}
-                            onClick={() => openAuthModal(res)}
-                            className={`absolute left-1 right-1 rounded-md p-1.5 overflow-hidden text-xs text-white shadow-sm border cursor-pointer transition-transform hover:scale-[1.02] hover:z-20 ${
-                              editingId === res.id ? 'bg-amber-400 border-amber-500 z-10 shadow-md ring-2 ring-amber-300' : 'bg-indigo-500 border-indigo-600 bg-opacity-90'
-                            }`}
-                            style={{ 
-                              top: `${timeToMinutes(res.startTime)}px`, 
-                              height: `${res.duration}px` 
-                            }}
-                          >
-                            <div className="font-bold truncate">{res.startTime} ~</div>
-                            <div className="truncate opacity-90">{res.duration}분 (예약자: {res.userId})</div>
-                          </div>
-                        ))}
+                        {trackReservations.map(res => {
+                          const theme = DRYER_THEMES[res.dryerId];
+                          const isEditing = editingId === res.id;
+                          
+                          return (
+                            <div
+                              key={res.id}
+                              onClick={() => openAuthModal(res)}
+                              className={`absolute left-1 right-1 rounded-md p-1.5 overflow-hidden text-white shadow-sm border cursor-pointer transition-transform hover:scale-[1.02] hover:z-20 ${
+                                isEditing ? 'bg-slate-700 border-slate-800 z-10 shadow-lg ring-2 ring-slate-400' : `${theme.timeline} bg-opacity-90`
+                              }`}
+                              style={{ top: `${timeToMinutes(res.startTime)}px`, height: `${res.duration}px` }}
+                            >
+                              <div className="font-bold text-[10px] sm:text-xs leading-tight">{res.startTime} ~</div>
+                              
+                              {/* ⭐️ 모바일 세로 모드에서 텍스트가 잘리지 않도록 줄바꿈(break-words) 적용 ⭐️ */}
+                              <div className="text-[10px] sm:text-xs leading-tight opacity-95 break-words whitespace-normal mt-0.5">
+                                <span className="hidden sm:inline">{res.duration}분 (예약: {res.userId})</span>
+                                <span className="sm:hidden">{res.duration}분<br/>ID:{res.userId}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })}
@@ -397,41 +365,20 @@ export default function DryerReservationSystem() {
             <button onClick={closeAuthModal} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
               <X size={20} />
             </button>
-            
             <div className="text-center mb-6">
               <div className="mx-auto w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-3">
                 <Lock size={24} />
               </div>
               <h3 className="text-xl font-bold text-slate-800">예약 권한 확인</h3>
-              <p className="text-sm text-slate-500 mt-1">
-                예약 시 설정한 비밀번호를 입력하세요.
-              </p>
+              <p className="text-sm text-slate-500 mt-1">예약 시 설정한 비밀번호를 입력하세요.</p>
             </div>
-
-            <input
-              type="password"
-              value={authModal.passwordInput}
-              onChange={(e) => setAuthModal({ ...authModal, passwordInput: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) })}
-              placeholder="비밀번호 4자리"
-              className="w-full h-12 py-0 leading-[48px] box-border text-center tracking-[0.5em] text-2xl px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none mb-2 font-bold"
-              autoFocus
-            />
-            
-            {authModal.error && (
-              <p className="text-red-500 text-sm text-center font-medium mb-4">{authModal.error}</p>
-            )}
-
+            <input type="password" value={authModal.passwordInput} onChange={(e) => setAuthModal({ ...authModal, passwordInput: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) })} placeholder="비밀번호 4자리" className="w-full h-12 py-0 leading-[48px] box-border text-center tracking-[0.5em] text-2xl px-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none mb-2 font-bold" autoFocus />
+            {authModal.error && <p className="text-red-500 text-sm text-center font-medium mb-4">{authModal.error}</p>}
             <div className="grid grid-cols-2 gap-3 mt-6">
-              <button 
-                onClick={() => handleAuthAction('edit')}
-                className="flex items-center justify-center py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors h-12 box-border"
-              >
+              <button onClick={() => handleAuthAction('edit')} className="flex items-center justify-center py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors h-12 box-border">
                 <Edit2 size={16} className="mr-1.5" /> 수정
               </button>
-              <button 
-                onClick={() => handleAuthAction('delete')}
-                className="flex items-center justify-center py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold transition-colors h-12 box-border"
-              >
+              <button onClick={() => handleAuthAction('delete')} className="flex items-center justify-center py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold transition-colors h-12 box-border">
                 <Trash2 size={16} className="mr-1.5" /> 삭제
               </button>
             </div>
