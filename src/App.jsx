@@ -5,6 +5,7 @@ import { Calendar, Clock, Wind, User, AlertCircle, CheckCircle2, Info, Lock, Tra
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
+// 제공해주신 실제 Firebase Config 적용 완료
 const firebaseConfig = {
   apiKey: "AIzaSyDJ4wgVNjQI6sM70J5MbITbpY-LdlIcJbc",
   authDomain: "laundry-app-7bf6c.firebaseapp.com",
@@ -35,7 +36,6 @@ const getTodayKST = () => {
 
 const ADMIN_PASSWORD = '0000';
 
-// 건조기별 고유 테마 색상 정의 (눈이 편안한 파스텔/로우 채도 톤)
 const DRYER_THEMES = {
   '1': {
     timeline: 'bg-indigo-500 border-indigo-600',
@@ -114,7 +114,7 @@ export default function DryerReservationSystem() {
       return newStart < resEnd && newEnd > resStart;
     });
 
-    if (isOverlapping) return showMessage('error', '선택한 시간에 이미 예약이 존재합니다.');
+    if (isOverlapping) return showMessage('error', '선택한 시간에 이미 다른 예약이 존재합니다.');
 
     const durationInt = parseInt(formData.duration, 10);
 
@@ -145,7 +145,7 @@ export default function DryerReservationSystem() {
       if (actionType === 'delete') {
         try {
           await deleteDoc(doc(db, 'reservations', reservation.id));
-          showMessage('success', '예약이 삭제되었습니다.');
+          showMessage('success', '예약이 안전하게 삭제되었습니다.');
         } catch (error) {
           console.error("Error deleting document: ", error);
           showMessage('error', '삭제 중 오류가 발생했습니다.');
@@ -170,6 +170,7 @@ export default function DryerReservationSystem() {
 
   const showMessage = (type, text) => {
     setMessage({ type, text });
+    // 애니메이션 시간(3초)이 끝난 후 메시지 상태를 null로 변경
     setTimeout(() => setMessage(null), 3000);
   };
 
@@ -177,28 +178,50 @@ export default function DryerReservationSystem() {
   const inputClassName = "block w-full h-12 px-3 py-0 leading-[48px] box-border border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-base bg-white m-0 appearance-none text-slate-800 font-medium";
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800 pb-20">
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans text-slate-800 pb-20 relative overflow-hidden">
+      
+      {/* ⭐️ 하단 팝업(Toast) 애니메이션을 위한 CSS 주입 ⭐️ */}
+      <style>
+        {`
+          @keyframes toastFade {
+            0% { opacity: 0; transform: translate(-50%, 20px); }
+            10% { opacity: 1; transform: translate(-50%, 0); }
+            85% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, 20px); }
+          }
+          .animate-toast {
+            animation: toastFade 3s ease-in-out forwards;
+          }
+        `}
+      </style>
+
+      {/* ⭐️ 모바일/PC 하단 팝업 (Toast Message) ⭐️ */}
+      {message && (
+        <div className={`fixed bottom-8 left-1/2 z-[100] w-[90%] max-w-sm flex items-center p-4 rounded-2xl shadow-2xl animate-toast ${
+          message.type === 'error' ? 'bg-red-500 text-white' : 'bg-slate-800 text-white'
+        }`}>
+          {message.type === 'error' ? <AlertCircle className="mr-3 shrink-0" size={24} /> : <CheckCircle2 className="mr-3 text-green-400 shrink-0" size={24} />}
+          <span className="font-semibold text-sm sm:text-base leading-snug">{message.text}</span>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto space-y-6">
         
-        <header className="flex items-center justify-between pb-4 border-b border-slate-200">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-4">
           <div className="flex items-center space-x-3">
-            <div className="bg-indigo-600 p-2 rounded-xl text-white">
+            <div className="bg-indigo-600 p-2 rounded-xl text-white shrink-0">
               <Wind size={28} />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900">공용 건조기 예약 시스템</h1>
+            {/* ⭐️ 타이틀 수정 완료 ⭐️ */}
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">
+              강원학사[도봉]<br className="sm:hidden" /> 건조기 예약 시스템
+            </h1>
           </div>
-          <div className="hidden sm:flex items-center text-xs text-green-600 bg-green-50 px-3 py-1.5 rounded-full border border-green-200 font-bold">
+          <div className="flex items-center text-xs text-green-600 bg-green-50 px-3 py-1.5 rounded-full border border-green-200 font-bold self-start sm:self-auto w-fit">
             <span className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
-            서버 실시간 연동 중
+            서버 연동 중
           </div>
         </header>
-
-        {message && (
-          <div className={`flex items-center p-4 rounded-xl shadow-sm ${message.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
-            {message.type === 'error' ? <AlertCircle className="mr-2" size={20} /> : <CheckCircle2 className="mr-2" size={20} />}
-            <span className="font-medium">{message.text}</span>
-          </div>
-        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-1 h-fit lg:sticky lg:top-6">
@@ -340,8 +363,6 @@ export default function DryerReservationSystem() {
                               style={{ top: `${timeToMinutes(res.startTime)}px`, height: `${res.duration}px` }}
                             >
                               <div className="font-bold text-[10px] sm:text-xs leading-tight">{res.startTime} ~</div>
-                              
-                              {/* ⭐️ 모바일 세로 모드에서 텍스트가 잘리지 않도록 줄바꿈(break-words) 적용 ⭐️ */}
                               <div className="text-[10px] sm:text-xs leading-tight opacity-95 break-words whitespace-normal mt-0.5">
                                 <span className="hidden sm:inline">{res.duration}분 (예약: {res.userId})</span>
                                 <span className="sm:hidden">{res.duration}분<br/>ID:{res.userId}</span>
